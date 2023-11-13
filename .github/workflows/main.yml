@@ -1,0 +1,55 @@
+name: Create Release
+
+on:
+  push:
+    branches:
+      - main
+      - master
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.10'
+
+      - name: Get version from latest_version.txt
+        id: version
+        run: echo "::set-output name=version::$(cat latest_version.txt)"
+
+      - name: Compress files into archive
+        run: |
+          version=${{ steps.version.outputs.version }}
+          branch=${{ github.ref_slug }}
+          zip_filename="mpy-${version}-${branch}.zip"
+          zip -r $zip_filename .
+          echo "::set-output name=zip_filename::$zip_filename"
+
+      - name: Create Release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ github.ref }}
+          body: |
+            ## What's changed:
+
+            [Compare changes](https://github.com/${{ github.repository }}/compare/${{ github.event.before }}...${{ github.sha }})
+          draft: false
+          prerelease: false
+
+      - name: Upload Archive to Release
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create_release.outputs.upload_url }}
+          asset_path: ${{ needs.compress.outputs.zip_filename }}
+          asset_name: ${{ needs.compress.outputs.zip_filename }}
